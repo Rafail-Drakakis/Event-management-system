@@ -1,20 +1,31 @@
 const API_URL = "http://localhost:5000";
+
 // Helper function to display notifications
 function showMessage(message, type = "info") {
+  // Remove existing notifications first
+  document.querySelectorAll('.notification').forEach(n => n.remove());
+  
   const messageDiv = document.createElement("div");
   messageDiv.className = `notification ${type}`;
   messageDiv.textContent = message;
-  // Add the message to the body
   document.body.appendChild(messageDiv);
+  
   // Remove the message after 3 seconds
   setTimeout(() => {
-    messageDiv.remove();
+    if (messageDiv.parentNode) {
+      messageDiv.remove();
+    }
   }, 3000);
 }
-update_event_chooser("bookEventIdselect");
-update_event_chooser("searchSeatsIdselect");
-update_event_chooser("cancelEventIdselect");
-update_event_chooser("pes");
+
+// Initialize the app when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+  update_event_chooser("bookEventIdselect");
+  update_event_chooser("searchSeatsIdselect");
+  update_event_chooser("cancelEventIdselect");
+  update_event_chooser("pes");
+  table_all();
+});
 // Helper function to display the tables
 async function table_render(table_name, table_json) {
   try {
@@ -86,9 +97,6 @@ function table_all() {
   table_render("events", null);
   table_render("tickets", null);
   table_render("reservations", null);
-  table_render("contains", null);
-  table_render("has", null);
-  table_render("makes", null);
 }
 
 // Helper function to populate tickets
@@ -99,9 +107,12 @@ async function add_ticket(
   t_availability,
   t_seat_number,
 ) {
+  const maxRetries = 3;
+  let retries = 0;
   var state = 0;
   var tid1 = null;
-  while (true) {
+  
+  while (retries < maxRetries) {
     try {
       if (Number(state) == 0) {
         const ticket = {
@@ -120,8 +131,8 @@ async function add_ticket(
           state = 1;
           tid1 = result.tid;
         } else {
-          console.log("first post failed");
-          throw response.status;
+          console.log("Ticket creation failed:", result.message);
+          throw new Error(result.message || "Ticket creation failed");
         }
       }
       if (Number(state) == 1) {
@@ -136,28 +147,48 @@ async function add_ticket(
         });
         const result = await response.json();
         if (response.status === 201) {
-          return;
+          return true;
         } else {
-          console.log("second post failed");
-          throw response.status;
+          console.log("Ticket-event link failed:", result.message);
+          throw new Error(result.message || "Ticket-event link failed");
         }
       }
     } catch (error) {
-      console.log("ERROR 3", error.stack);
-      console.log("Error", error.message);
+      retries++;
+      console.log(`Error adding ticket (attempt ${retries}/${maxRetries}):`, error.message);
+      if (retries >= maxRetries) {
+        showMessage(`Failed to add ticket after ${maxRetries} attempts`, "error");
+        return false;
+      }
+      // Wait before retrying
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
   }
+  return false;
 }
 async function update_event_chooser(container_name) {
-  while (true) {
+  const maxRetries = 3;
+  let retries = 0;
+  
+  while (retries < maxRetries) {
     try {
       const response = await fetch(`${API_URL}/eventnames`, {
         method: "GET",
         headers: { "Content-Type": "application/json" },
       });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       let jsonData = await response.json();
-      console.log(Object.keys(jsonData).length);
       let container = document.getElementById(container_name);
+      
+      if (!container) {
+        console.error(`Container ${container_name} not found`);
+        return;
+      }
+      
       while (container.firstChild) {
         container.removeChild(container.firstChild);
       }
@@ -169,7 +200,7 @@ async function update_event_chooser(container_name) {
         container.appendChild(option);
       }
 
-      for (let i = 0; i < Object.keys(jsonData).length; i++) {
+      for (let i = 0; i < jsonData.length; i++) {
         var option = document.createElement("option");
         option.value = jsonData[i].eid;
         option.innerHTML = jsonData[i].name;
@@ -177,10 +208,14 @@ async function update_event_chooser(container_name) {
       }
       return;
     } catch (error) {
-      showMessage("error updating checkbox");
-      console.log("Error", error.stack);
-      console.log("Error", error.name);
-      console.log("Error", error.message);
+      retries++;
+      console.log(`Error updating ${container_name} (attempt ${retries}/${maxRetries}):`, error.message);
+      if (retries >= maxRetries) {
+        showMessage(`Failed to load events for ${container_name}`, "error");
+        return;
+      }
+      // Wait a bit before retrying
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
   }
 }
@@ -296,7 +331,8 @@ document
       const result = await response.json();
       if (response.status === 201) {
         showMessage(result.message, "success");
-        setTimeout(table_all(), 500);
+        setTimeout(table_all, 500);
+        document.getElementById("addCustomerForm").reset();
       } else {
         showMessage(result.message, "error");
       }
@@ -369,11 +405,12 @@ document
           );
         }
         showMessage(result.message, "success");
-        setTimeout(table_all(), 500);
+        setTimeout(table_all, 500);
         update_event_chooser("bookEventIdselect");
         update_event_chooser("searchSeatsIdselect");
         update_event_chooser("cancelEventIdselect");
         update_event_chooser("pes");
+        document.getElementById("addEventForm").reset();
       } else {
         showMessage(result.message, "error");
       }
@@ -441,7 +478,9 @@ document
       const result = await response.json();
       if (response.status === 201) {
         showMessage(result.message, "success");
-        setTimeout(table_all(), 500);
+        setTimeout(table_all, 500);
+        document.getElementById("bookTicketsForm").reset();
+        document.getElementById("bookTicketsFormdiv").innerHTML = "";
       } else {
         showMessage(result.message, "error");
       }
@@ -471,7 +510,8 @@ document
       const result = await response.json();
       if (response.status === 200) {
         showMessage(result.message, "success");
-        setTimeout(table_all(), 500);
+        setTimeout(table_all, 500);
+        document.getElementById("cancelReservationForm").reset();
       } else {
         showMessage(result.message, "error");
       }
@@ -502,7 +542,7 @@ document
         removeEventFromDropdown("searchSeatsIdselect", eventid);
         removeEventFromDropdown("pes", eventid);
         showMessage("Event cancelled", "success");
-        setTimeout(table_all(), 500);
+        setTimeout(table_all, 500);
       } else {
         showMessage(result.message, "error");
       }

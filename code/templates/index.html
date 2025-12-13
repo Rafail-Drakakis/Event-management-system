@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html lang="en">
   <head>
@@ -9,6 +8,7 @@
       rel="stylesheet"
       href="{{ url_for('static', filename='styles.css') }}"
     />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎫</text></svg>">
     <script
       type="text/javascript"
       src="{{ url_for('static', filename='script.js') }}"
@@ -23,38 +23,40 @@
       <section id="operations">
         <div class="operation">
           <h2>Add New Customer</h2>
-          <!-- html form gets consumed by js that in turn calls python -->
           <form id="addCustomerForm">
             <input
               type="text"
               id="customerFirstName"
               placeholder="First Name"
               required
+              autocomplete="given-name"
             />
             <input
               type="text"
               id="customerLastName"
               placeholder="Last Name"
               required
+              autocomplete="family-name"
             />
             <input
-              type="text"
+              type="email"
               id="customerEmail"
-              placeholder="Email"
+              placeholder="Email Address"
               required
+              autocomplete="email"
             />
             <input
               type="text"
               id="customerCredit"
-              placeholder="Credit Info"
-              required
+              placeholder="Credit Card Info (optional)"
+              autocomplete="cc-number"
             />
             <button type="submit">Add Customer</button>
           </form>
         </div>
 
         <div class="operation">
-          <h2>Add New Event</h2>
+          <h2>Create New Event</h2>
           <form id="addEventForm">
             <input
               type="text"
@@ -62,77 +64,93 @@
               placeholder="Event Name"
               required
             />
-            <input type="text" id="eventType" placeholder="Type" required />
+            <input 
+              type="text" 
+              id="eventType" 
+              placeholder="Event Type (Concert, Theater, Sports...)" 
+              required 
+            />
+            <label>Event Time</label>
             <input type="time" id="eventTime" required />
+            <label>Event Date</label>
             <input type="date" id="eventDate" required />
             <input
               type="number"
               id="eventCapacity"
-              placeholder="Capacity"
+              placeholder="Total Capacity"
+              min="1"
               required
             />
-
+            <label>Seat Configuration</label>
             <input
               type="number"
               id="VIP_Capacity"
               placeholder="Number of VIP seats"
+              min="0"
               required
             />
             <input
               type="number"
               id="FrontRow_Capacity"
-              placeholder="Number of front row seats"
+              placeholder="Number of Front Row seats"
+              min="0"
               required
             />
             <input
               type="number"
               id="Normal_Capacity"
-              placeholder="Number of back row or side row seats"
+              placeholder="Number of Regular seats"
+              min="0"
               required
             />
-
+            <label>Pricing (€)</label>
             <input
               type="number"
               step="0.01"
               id="VIP_Price"
-              placeholder="Price (in euro) of VIP seats"
+              placeholder="VIP seat price"
+              min="0"
               required
             />
             <input
               type="number"
               step="0.01"
               id="FrontRow_Price"
-              placeholder="Price (in euro) of front row seats"
+              placeholder="Front Row seat price"
+              min="0"
               required
             />
             <input
               type="number"
               step="0.01"
               id="Normal_Price"
-              placeholder="Price (in euro) of back row or side row seats"
+              placeholder="Regular seat price"
+              min="0"
               required
             />
-            <button type="submit">Add Event</button>
+            <button type="submit">Create Event</button>
           </form>
         </div>
 
         <div class="operation">
           <h2>Book Tickets</h2>
           <form id="bookTicketsForm">
+            <label>Select Event</label>
             <select id="bookEventIdselect" name="event_select" required>
-              <option value="noEvent">No event</option>
+              <option value="">Choose an event...</option>
             </select>
             <input
-              type="text"
+              type="email"
               id="customerIdmail"
-              placeholder="Customer email"
+              placeholder="Customer Email"
               required
             />
             <input
               type="number"
               step="1"
               id="numOfTickets"
-              placeholder="Number of tickets"
+              placeholder="Number of Tickets"
+              min="1"
               oninput="update_tickets_chooser()"
               required
             />
@@ -144,10 +162,11 @@
         <div class="operation">
           <h2>Search Available Seats</h2>
           <form id="searchSeatsForm">
+            <label>Select Event</label>
             <select id="searchSeatsIdselect" name="seats_select" required>
-              <option value="noEvent">No event</option>
+              <option value="">Choose an event...</option>
             </select>
-            <button type="submit">Search</button>
+            <button type="submit">Search Available Seats</button>
           </form>
           <div id="availableSeatsResult_container"></div>
         </div>
@@ -155,83 +174,74 @@
         <div class="operation">
           <h2>Cancel Event</h2>
           <form id="cancelEventForm">
+            <label>Select Event to Cancel</label>
             <select id="cancelEventIdselect" name="cancel_select" required>
-              <option value="noEvent">No event</option>
+              <option value="">Choose an event...</option>
             </select>
-            <button type="submit">Cancel Event</button>
+            <button type="submit">Cancel Event & Refund All</button>
           </form>
         </div>
 
         <div class="operation">
-          <h2>Cancel Reservation(s)</h2>
+          <h2>Cancel Reservation</h2>
           <form id="cancelReservationForm">
             <input
-              type="text"
+              type="email"
               id="customerEmailCancel"
-              placeholder=" Customer Email"
+              placeholder="Customer Email"
               required
             />
-            <button type="submit">Cancel Reservation</button>
+            <button type="submit">Cancel All Reservations</button>
           </form>
         </div>
 
         <div class="operation">
-          <h2>View profits</h2>
+          <h2>View Revenue</h2>
           <form id="profitsForm">
+            <label>Filter by Event</label>
             <select id="pes" name="profit_select" required>
-              <option value="All">All events</option>
+              <option value="All">All Events</option>
             </select>
+            <label>Filter by Ticket Type</label>
             <select id="pts" name="profit_type_select" required>
-              <option value="All">All types</option>
-              <option value="VIP">VIP only</option>
+              <option value="All">All Ticket Types</option>
+              <option value="VIP">VIP Only</option>
             </select>
-
-            <button type="submit">View</button>
+            <button type="submit">Calculate Revenue</button>
           </form>
           <div id="eventSProfits_container"></div>
         </div>
 
         <div class="operation">
-          <h2>View Active Reservations</h2>
+          <h2>Active Reservations Report</h2>
           <form id="viewReservationsForm">
-            <label>Starting date</label
-            ><input type="date" id="eventDateS" required />
-            <label>Final date</label
-            ><input type="date" id="eventDateF" required />
-            <button type="submit">View</button>
+            <label>Start Date</label>
+            <input type="date" id="eventDateS" required />
+            <label>End Date</label>
+            <input type="date" id="eventDateF" required />
+            <button type="submit">View Reservations</button>
           </form>
           <div id="ActiveReservationsResult_container"></div>
         </div>
 
         <div class="operation">
-          <h2>View Event Statistics</h2>
-          <button id="mostPopularEvent">
-            Most Popular Event (most reservations)
-          </button>
-          <button id="highestProfitEvent">Event with Highest Profit</button>
-          <button id="refresh_render">Refresh Database</button>
+          <h2>Analytics & Statistics</h2>
+          <button id="mostPopularEvent">Most Popular Event</button>
+          <button id="highestProfitEvent">Highest Revenue Event</button>
+          <button id="refresh_render">Refresh All Data</button>
         </div>
 
         <div id="customers_container" class="operation">
-          <h2>Customers Table</h2>
+          <h2>Customers</h2>
         </div>
         <div id="events_container" class="operation">
-          <h2>Events Table</h2>
+          <h2>Events</h2>
         </div>
         <div id="tickets_container" class="operation">
-          <h2>Tickets Table</h2>
+          <h2>Tickets</h2>
         </div>
         <div id="reservations_container" class="operation">
-          <h2>Reservations Table</h2>
-        </div>
-        <div id="contains_container" class="operation">
-          <h2>Contains Table</h2>
-        </div>
-        <div id="has_container" class="operation">
-          <h2>Has Table</h2>
-        </div>
-        <div id="makes_container" class="operation">
-          <h2>Makes Table</h2>
+          <h2>Reservations</h2>
         </div>
       </section>
     </main>

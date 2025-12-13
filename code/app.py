@@ -161,22 +161,33 @@ def manage_customers():
     conn = db_connection()
     cursor = conn.cursor()
 
-    # Handle GET request: fetch all customers from the database
-    if request.method == "GET":
-        cursor.execute(
-            "SELECT * FROM Customer"
-        )  # Execute SQL query to get all customers
-        customers = [
-            dict(row) for row in cursor.fetchall()
-        ]  # Convert each row into a dictionary
-        return jsonify(customers)  # Return the list of customers as a JSON response
+    try:
+        # Handle GET request: fetch all customers from the database
+        if request.method == "GET":
+            cursor.execute(
+                "SELECT * FROM Customer"
+            )  # Execute SQL query to get all customers
+            customers = [
+                dict(row) for row in cursor.fetchall()
+            ]  # Convert each row into a dictionary
+            return jsonify(customers)  # Return the list of customers as a JSON response
 
-    # Handle POST request: add a new customer to the database
-    if request.method == "POST":
-        try:
+        # Handle POST request: add a new customer to the database
+        if request.method == "POST":
             new_customer = (
                 request.json
             )  # Get the new customer data from the request body (in JSON format)
+            
+            # Validate required fields
+            required_fields = ["mail", "f_name", "l_name"]
+            for field in required_fields:
+                if not new_customer.get(field):
+                    return jsonify({"message": f"Missing required field: {field}"}), 400
+            
+            # Basic email validation
+            if "@" not in new_customer["mail"] or "." not in new_customer["mail"]:
+                return jsonify({"message": "Invalid email format"}), 400
+            
             # Execute SQL query to insert the new customer into the Customer table
             cursor.execute(
                 """
@@ -185,23 +196,28 @@ def manage_customers():
             """,
                 (
                     new_customer["mail"],
-                    new_customer["credit_info"],
+                    new_customer.get("credit_info", ""),
                     new_customer["f_name"],
                     new_customer["l_name"],
                 ),
             )
             conn.commit()  # Commit the transaction to save the new customer
-            conn.close()  # Close the database connection
             return (
-                jsonify({"message": "Customer added successfully!"}),
+                jsonify({"message": "Customer added successfully!", "cid": cursor.lastrowid}),
                 201,
             )  # Return success message
-        except:
-            conn.close()  # Close the connection if there was an error
-            return (
-                jsonify({"message": "Error, maybe email is not unique"}),
-                500,
-            )  # Return error message
+    except sqlite3.IntegrityError:
+        return (
+            jsonify({"message": "Error: Email already exists"}),
+            409,
+        )  # Return conflict error
+    except Exception as e:
+        return (
+            jsonify({"message": f"Error: {str(e)}"}),
+            500,
+        )  # Return error message
+    finally:
+        conn.close()  # Always close the connection
 
 
 # Route to manage events: GET (fetch events) and POST (add new event)
@@ -210,20 +226,35 @@ def manage_events():
     conn = db_connection()
     cursor = conn.cursor()
 
-    # Handle GET request: fetch all events from the database
-    if request.method == "GET":
-        cursor.execute("SELECT * FROM Event")  # Execute SQL query to get all events
-        events = [
-            dict(row) for row in cursor.fetchall()
-        ]  # Convert each row into a dictionary
-        return jsonify(events)  # Return the list of events as a JSON response
+    try:
+        # Handle GET request: fetch all events from the database
+        if request.method == "GET":
+            cursor.execute("SELECT * FROM Event")  # Execute SQL query to get all events
+            events = [
+                dict(row) for row in cursor.fetchall()
+            ]  # Convert each row into a dictionary
+            return jsonify(events)  # Return the list of events as a JSON response
 
-    # Handle POST request: add a new event to the database
-    if request.method == "POST":
-        new_event = (
-            request.json
-        )  # Get the new event data from the request body (in JSON format)
-        try:
+        # Handle POST request: add a new event to the database
+        if request.method == "POST":
+            new_event = (
+                request.json
+            )  # Get the new event data from the request body (in JSON format)
+            
+            # Validate required fields
+            required_fields = ["name", "type", "time", "date", "capacity"]
+            for field in required_fields:
+                if not new_event.get(field):
+                    return jsonify({"message": f"Missing required field: {field}"}), 400
+            
+            # Validate capacity is a positive integer
+            try:
+                capacity = int(new_event["capacity"])
+                if capacity <= 0:
+                    return jsonify({"message": "Capacity must be a positive number"}), 400
+            except ValueError:
+                return jsonify({"message": "Capacity must be a valid number"}), 400
+            
             # Execute SQL query to insert the new event into the Event table
             cursor.execute(
                 """
@@ -235,19 +266,19 @@ def manage_events():
                     new_event["type"],
                     new_event["time"],
                     new_event["date"],
-                    new_event["capacity"],
+                    capacity,
                 ),
             )
             id = cursor.lastrowid  # Get the ID of the newly inserted event
             conn.commit()  # Commit the transaction to save the new event
-            conn.close()  # Close the database connection
             return (
                 jsonify({"message": "Event added successfully!", "id": id}),
                 201,
             )  # Return success message with event ID
-        except:
-            conn.close()  # Close the connection if there was an error
-            return jsonify({"message": "Error"}), 500  # Return error message
+    except Exception as e:
+        return jsonify({"message": f"Error: {str(e)}"}), 500  # Return error message
+    finally:
+        conn.close()  # Always close the connection
 
 
 # Route to fetch the list of event names (for dropdown)
@@ -256,13 +287,18 @@ def dropdown_events():
     conn = db_connection()
     cursor = conn.cursor()
 
-    cursor.execute(
-        "SELECT eid,name FROM Event"
-    )  # Execute SQL query to get event ID and name
-    events = [
-        dict(row) for row in cursor.fetchall()
-    ]  # Convert each row into a dictionary
-    return jsonify(events)  # Return the list of event names as a JSON response
+    try:
+        cursor.execute(
+            "SELECT eid,name FROM Event"
+        )  # Execute SQL query to get event ID and name
+        events = [
+            dict(row) for row in cursor.fetchall()
+        ]  # Convert each row into a dictionary
+        return jsonify(events)  # Return the list of event names as a JSON response
+    except Exception as e:
+        return jsonify({"message": f"Error: {str(e)}"}), 500
+    finally:
+        conn.close()
 
 
 # Route to manage tickets: GET (fetch tickets) and POST (add new ticket)
@@ -271,20 +307,35 @@ def manage_tickets():
     conn = db_connection()
     cursor = conn.cursor()
 
-    # Handle GET request: fetch all tickets from the database
-    if request.method == "GET":
-        cursor.execute("SELECT * FROM Ticket")  # Execute SQL query to get all tickets
-        tickets = [
-            dict(row) for row in cursor.fetchall()
-        ]  # Convert each row into a dictionary
-        return jsonify(tickets)  # Return the list of tickets as a JSON response
+    try:
+        # Handle GET request: fetch all tickets from the database
+        if request.method == "GET":
+            cursor.execute("SELECT * FROM Ticket")  # Execute SQL query to get all tickets
+            tickets = [
+                dict(row) for row in cursor.fetchall()
+            ]  # Convert each row into a dictionary
+            return jsonify(tickets)  # Return the list of tickets as a JSON response
 
-    # Handle POST request: add a new ticket to the database
-    if request.method == "POST":
-        try:
+        # Handle POST request: add a new ticket to the database
+        if request.method == "POST":
             new_ticket = (
                 request.json
             )  # Get the new ticket data from the request body (in JSON format)
+            
+            # Validate required fields
+            required_fields = ["type", "price", "seat_number"]
+            for field in required_fields:
+                if field not in new_ticket:
+                    return jsonify({"message": f"Missing required field: {field}"}), 400
+            
+            # Validate price is a positive number
+            try:
+                price = float(new_ticket["price"])
+                if price < 0:
+                    return jsonify({"message": "Price cannot be negative"}), 400
+            except ValueError:
+                return jsonify({"message": "Price must be a valid number"}), 400
+            
             # Execute SQL query to insert the new ticket into the Ticket table
             cursor.execute(
                 """
@@ -293,21 +344,21 @@ def manage_tickets():
             """,
                 (
                     new_ticket["type"],
-                    new_ticket["price"],
-                    new_ticket["availability"],
+                    price,
+                    new_ticket.get("availability", 1),
                     new_ticket["seat_number"],
                 ),
             )
             id = cursor.lastrowid  # Get the ID of the newly inserted ticket
             conn.commit()  # Commit the transaction to save the new ticket
-            conn.close()  # Close the database connection
             return (
                 jsonify({"message": "Ticket added successfully!", "tid": id}),
                 201,
             )  # Return success message with ticket ID
-        except:
-            conn.close()  # Close the connection if there was an error
-            return jsonify({"message": "Error"}), 500  # Return error message
+    except Exception as e:
+        return jsonify({"message": f"Error: {str(e)}"}), 500  # Return error message
+    finally:
+        conn.close()  # Always close the connection
 
 
 # Rotue to get reservations and add reservations
@@ -344,17 +395,16 @@ def manage_reservations():
                     new_reservation["tickets_number"],
                 ),
             )
-            row = cursor.fetchone()  # Retrieve the inserted row's ID
-            (inserted_id,) = row if row else None
+            inserted_id = cursor.lastrowid  # Get the ID of the newly inserted reservation
             conn.commit()  # Commit the transaction
-            conn.close()  # Close the connection
             return (
-                jsonify({"message": "Reservation added successfully!"}),
+                jsonify({"message": "Reservation added successfully!", "rid": inserted_id}),
                 201,
             )  # Return success message
-        except:
-            conn.close()  # Close the connection if an error occurs
-            return jsonify({"message": "Error"}), 500  # Return error message
+        except Exception as e:
+            return jsonify({"message": f"Error: {str(e)}"}), 500  # Return error message
+        finally:
+            conn.close()  # Always close the connection
 
 
 @app.route("/contains", methods=["GET", "POST"])
@@ -363,20 +413,20 @@ def manage_contains():
     conn = db_connection()
     cursor = conn.cursor()
 
-    # Handling GET request to retrieve all entries in the Contains table
-    if request.method == "GET":
-        cursor.execute("SELECT * FROM Contains")
-        res = [
-            dict(row) for row in cursor.fetchall()
-        ]  # Convert query result to dictionary
-        return jsonify(res)  # Return the list of relations in JSON format
+    try:
+        # Handling GET request to retrieve all entries in the Contains table
+        if request.method == "GET":
+            cursor.execute("SELECT * FROM Contains")
+            res = [
+                dict(row) for row in cursor.fetchall()
+            ]  # Convert query result to dictionary
+            return jsonify(res)  # Return the list of relations in JSON format
 
-    # Handling POST request to add a new relation in the Contains table
-    if request.method == "POST":
-        new_contains = (
-            request.json
-        )  # Get the data from the request body (in JSON format)
-        try:
+        # Handling POST request to add a new relation in the Contains table
+        if request.method == "POST":
+            new_contains = (
+                request.json
+            )  # Get the data from the request body (in JSON format)
             cursor.execute(
                 """
             INSERT INTO Contains (eid, tid)
@@ -389,9 +439,10 @@ def manage_contains():
                 jsonify({"message": "Relation added successfully!"}),
                 201,
             )  # Return success message
-        except:
-            conn.close()  # Close the connection if an error occurs
-            return jsonify({"message": "Error"}), 500  # Return error message
+    except Exception as e:
+        return jsonify({"message": f"Error: {str(e)}"}), 500  # Return error message
+    finally:
+        conn.close()  # Always close the connection
 
 
 @app.route("/makes", methods=["GET", "POST"])
@@ -400,18 +451,18 @@ def manage_makes():
     conn = db_connection()
     cursor = conn.cursor()
 
-    # Handling GET request to retrieve all entries in the Makes table
-    if request.method == "GET":
-        cursor.execute("SELECT * FROM Makes")
-        res = [
-            dict(row) for row in cursor.fetchall()
-        ]  # Convert query result to dictionary
-        return jsonify(res)  # Return the list of relations in JSON format
+    try:
+        # Handling GET request to retrieve all entries in the Makes table
+        if request.method == "GET":
+            cursor.execute("SELECT * FROM Makes")
+            res = [
+                dict(row) for row in cursor.fetchall()
+            ]  # Convert query result to dictionary
+            return jsonify(res)  # Return the list of relations in JSON format
 
-    # Handling POST request to add a new relation in the Makes table
-    if request.method == "POST":
-        new_makes = request.json  # Get the data from the request body (in JSON format)
-        try:
+        # Handling POST request to add a new relation in the Makes table
+        if request.method == "POST":
+            new_makes = request.json  # Get the data from the request body (in JSON format)
             cursor.execute(
                 """
             INSERT INTO Makes (cid, rid)
@@ -420,14 +471,14 @@ def manage_makes():
                 (new_makes["cid"], new_makes["rid"]),
             )  # Insert the relation into the database
             conn.commit()  # Commit the transaction
-            conn.close()  # Close the connection
             return (
                 jsonify({"message": "Relation added successfully!"}),
                 201,
             )  # Return success message
-        except:
-            conn.close()  # Close the connection if an error occurs
-            return jsonify({"message": "Error"}), 500  # Return error message
+    except Exception as e:
+        return jsonify({"message": f"Error: {str(e)}"}), 500  # Return error message
+    finally:
+        conn.close()  # Always close the connection
 
 
 @app.route("/has", methods=["GET", "POST"])
@@ -436,18 +487,18 @@ def manage_has():
     conn = db_connection()
     cursor = conn.cursor()
 
-    # Handling GET request to retrieve all entries in the Has table
-    if request.method == "GET":
-        cursor.execute("SELECT * FROM Has")
-        res = [
-            dict(row) for row in cursor.fetchall()
-        ]  # Convert query result to dictionary
-        return jsonify(res)  # Return the list of relations in JSON format
+    try:
+        # Handling GET request to retrieve all entries in the Has table
+        if request.method == "GET":
+            cursor.execute("SELECT * FROM Has")
+            res = [
+                dict(row) for row in cursor.fetchall()
+            ]  # Convert query result to dictionary
+            return jsonify(res)  # Return the list of relations in JSON format
 
-    # Handling POST request to add a new relation in the Has table
-    if request.method == "POST":
-        new_has = request.json  # Get the data from the request body (in JSON format)
-        try:
+        # Handling POST request to add a new relation in the Has table
+        if request.method == "POST":
+            new_has = request.json  # Get the data from the request body (in JSON format)
             cursor.execute(
                 """
             INSERT INTO Has (tid, eid)
@@ -456,14 +507,14 @@ def manage_has():
                 (new_has["tid"], new_has["eid"]),
             )  # Insert the relation into the database
             conn.commit()  # Commit the transaction
-            conn.close()  # Close the connection
             return (
                 jsonify({"message": "Relation added successfully!"}),
                 201,
             )  # Return success message
-        except:
-            conn.close()  # Close the connection if an error occurs
-            return jsonify({"message": "Error"}), 500  # Return error message
+    except Exception as e:
+        return jsonify({"message": f"Error: {str(e)}"}), 500  # Return error message
+    finally:
+        conn.close()  # Always close the connection
 
 
 # route to get available tickets
@@ -553,20 +604,25 @@ def delete_customer(cid):
     conn = db_connection()
     cursor = conn.cursor()
 
-    # Handling DELETE request to remove a customer from the database
     try:
-        cursor.execute(
-            "DELETE FROM Customer WHERE cid = ?", (cid,)
-        )  # Delete customer record by customer ID
-        conn.commit()  # Commit the transaction
-        conn.close()  # Close the connection
+        # Check if customer has any reservations
+        cursor.execute("SELECT COUNT(*) FROM Reservation WHERE cid = ?", (cid,))
+        if cursor.fetchone()[0] > 0:
+            return jsonify({"message": "Cannot delete customer with active reservations. Cancel reservations first."}), 400
+        
+        # Delete customer record by customer ID
+        cursor.execute("DELETE FROM Customer WHERE cid = ?", (cid,))
+        if cursor.rowcount == 0:
+            return jsonify({"message": f"Customer with ID {cid} not found"}), 404
+        conn.commit()
         return (
             jsonify({"message": f"Customer with ID {cid} deleted successfully!"}),
             200,
-        )  # Return success message
-    except:
-        conn.close()  # Close the connection if an error occurs
-        return jsonify({"message": "Error"}), 500  # Return error message
+        )
+    except Exception as e:
+        return jsonify({"message": f"Error: {str(e)}"}), 500
+    finally:
+        conn.close()
 
 
 # route to delete events
@@ -576,24 +632,28 @@ def delete_event(eid):
     conn = db_connection()
     cursor = conn.cursor()
 
-    # Handling DELETE request to remove an event from the database
     try:
-        cursor.execute(
-            "DELETE FROM Event WHERE eid = ?", (eid,)
-        )  # Delete event record by event ID
-        conn.commit()  # Commit the transaction
-        conn.close()  # Close the connection
+        # Check if event has any reservations
+        cursor.execute("SELECT COUNT(*) FROM Reservation WHERE eid = ?", (eid,))
+        if cursor.fetchone()[0] > 0:
+            return jsonify({"message": "Cannot delete event with active reservations. Use cancel event instead."}), 400
+        
+        cursor.execute("DELETE FROM Event WHERE eid = ?", (eid,))
+        if cursor.rowcount == 0:
+            return jsonify({"message": f"Event with ID {eid} not found"}), 404
+        conn.commit()
         return (
             jsonify({"message": f"Event with ID {eid} deleted successfully!"}),
             200,
-        )  # Return success message
-    except:
-        conn.close()  # Close the connection if an error occurs
-        return jsonify({"message": "Error"}), 500  # Return error message
+        )
+    except Exception as e:
+        return jsonify({"message": f"Error: {str(e)}"}), 500
+    finally:
+        conn.close()
 
 
 # Route to delete a specific ticket by its ID
-@app.route("/tickets/<int:tid>", methods=["GET"])
+@app.route("/tickets/<int:tid>", methods=["DELETE"])
 def delete_ticket(tid):
     # Establish a database connection
     conn = db_connection()
@@ -605,14 +665,14 @@ def delete_ticket(tid):
             "DELETE FROM Ticket WHERE tid = ?", (tid,)
         )  # Delete the ticket record
         conn.commit()  # Commit the changes
-        conn.close()  # Close the connection
         return (
             jsonify({"message": f"Ticket with ID {tid} deleted successfully!"}),
             200,
         )  # Return success message
-    except:
-        conn.close()  # Close the connection if an error occurs
-        return jsonify({"message": "Error"}), 500  # Return error message
+    except Exception as e:
+        return jsonify({"message": f"Error: {str(e)}"}), 500  # Return error message
+    finally:
+        conn.close()  # Always close the connection
 
 
 # Route to delete a specific reservation by its ID
@@ -622,20 +682,24 @@ def delete_reservation(rid):
     conn = db_connection()
     cursor = conn.cursor()
 
-    # Handling DELETE request to remove a reservation by its ID
     try:
-        cursor.execute(
-            "DELETE FROM Reservation WHERE rid = ?", (rid,)
-        )  # Delete the reservation record
-        conn.commit()  # Commit the changes
-        conn.close()  # Close the connection
+        # First delete from Makes table
+        cursor.execute("DELETE FROM Makes WHERE rid = ?", (rid,))
+        
+        # Delete the reservation record
+        cursor.execute("DELETE FROM Reservation WHERE rid = ?", (rid,))
+        if cursor.rowcount == 0:
+            return jsonify({"message": f"Reservation with ID {rid} not found"}), 404
+        conn.commit()
         return (
             jsonify({"message": f"Reservation with ID {rid} deleted successfully!"}),
             200,
-        )  # Return success message
-    except:
-        conn.close()  # Close the connection if an error occurs
-        return jsonify({"message": "Error"}), 500  # Return error message
+        )
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"message": f"Error: {str(e)}"}), 500
+    finally:
+        conn.close()
 
 
 # Route to get available seats for a specific event and seat type
@@ -774,25 +838,40 @@ def get_cid_from_email(mail):
         cursor.execute(
             """
         SELECT cid FROM Customer 
-        WHERE mail is ?
+        WHERE mail = ?
         """,
             (mail,),
         )
-        cid = cursor.fetchone()[0]
+        result = cursor.fetchone()
+        if result is None:
+            return (
+                404,
+                jsonify({"message": "Customer not found with this email"}),
+                1,
+            )
+        cid = result[0]
         return 0, 0, cid  # Successful operation
-    except:
-        conn.close()
+    except Exception as e:
         return (
             500,
-            jsonify({"message": "Error finding customer from email"}),
+            jsonify({"message": f"Error finding customer from email: {str(e)}"}),
             1,
         )  # Error case
+    finally:
+        conn.close()
 
 
 # Route to reserve tickets for a customer
 @app.route("/reserve_tickets", methods=["POST"])
 def reserve_tickets():
     data = request.json  # Data from the request body
+    
+    # Validate required fields
+    required_fields = ["eid", "cid", "tickets", "tickets_number", "date"]
+    for field in required_fields:
+        if field not in data:
+            return jsonify({"message": f"Missing required field: {field}"}), 400
+    
     price_arr = []
 
     # Get the price for each ticket type
@@ -801,7 +880,7 @@ def reserve_tickets():
         if status != 500:
             price_arr.append(jdata.get_json()["price"])
         else:
-            return jsonify({"message": "Error"}), 500  # Error fetching price
+            return jsonify({"message": "Error fetching ticket price"}), 500
 
     # Calculate total price based on ticket quantity and price
     data["total_price"] = sum(
@@ -815,7 +894,7 @@ def reserve_tickets():
 
     # Get customer ID from email
     s, msg, data["cid"] = get_cid_from_email(data["cid"])
-    if s == 500:
+    if s != 0:
         return msg, s  # Error fetching customer ID
 
     # Connect to the database to insert reservation details
@@ -865,19 +944,21 @@ def reserve_tickets():
         )
 
         conn.commit()  # Commit the transaction
-        conn.close()  # Close the connection
         return (
             jsonify(
                 {
                     "message": "Reservation completed successfully!",
                     "reservation_id": rid,
+                    "total_price": data["total_price"],
                 }
             ),
             201,
         )
-    except:
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"message": f"Error: {str(e)}"}), 500
+    finally:
         conn.close()
-        return jsonify({"message": "Error"}), 500  # Error during reservation processing
 
 
 # Route to cancel a reservation
@@ -887,103 +968,108 @@ def cancel_reservation():
     cursor = conn.cursor()
 
     try:
-        # Retrieve email from request data
+        # Retrieve email and optional reservation_id from request data
         data = request.json
         email = data.get("email")
+        specific_rid = data.get("reservation_id")  # Optional: cancel specific reservation
+
+        if not email:
+            return jsonify({"message": "Email is required"}), 400
 
         # Step 1: Get customer ID (cid) from Customer table based on email
         cursor.execute(
-            """
-        SELECT cid FROM Customer WHERE mail = ?
-        """,
+            """SELECT cid FROM Customer WHERE mail = ?""",
             (email,),
         )
         customer = cursor.fetchone()
 
         if not customer:
-            conn.close()
             return jsonify({"message": "Customer not found"}), 404
 
         cid = customer[0]
 
-        # Step 2: Retrieve the reservation ID (rid) associated with the customer (cid)
-        cursor.execute(
-            """
-        SELECT rid FROM Reservation WHERE cid = ?
-        """,
-            (cid,),
-        )
-        reservation = cursor.fetchone()
-
-        if not reservation:
-            conn.close()
-            return jsonify({"message": "Reservation not found for the customer"}), 404
-
-        rid = reservation[0]
-
-        # Step 3: Retrieve all tickets associated with the reservation
-        cursor.execute(
-            """
-        SELECT tid FROM Contains 
-        WHERE tid IN (SELECT tid FROM Ticket WHERE tid IN 
-                    (SELECT tid FROM Contains WHERE eid IN (SELECT eid FROM Reservation WHERE rid = ?)))
-        """,
-            (rid,),
-        )
-        tickets = cursor.fetchall()
-
-        # Step 4: Update ticket availability to 1 (available)
-        for ticket in tickets:
+        # Step 2: Retrieve reservation(s) associated with the customer
+        if specific_rid:
             cursor.execute(
-                """
-            UPDATE Ticket SET availability = 1 WHERE tid = ?
-            """,
-                (ticket["tid"],),
+                """SELECT rid, eid FROM Reservation WHERE cid = ? AND rid = ?""",
+                (cid, specific_rid),
+            )
+        else:
+            cursor.execute(
+                """SELECT rid, eid FROM Reservation WHERE cid = ?""",
+                (cid,),
+            )
+        
+        reservations = cursor.fetchall()
+
+        if not reservations:
+            return jsonify({"message": "No reservations found for the customer"}), 404
+
+        canceled_count = 0
+        for reservation in reservations:
+            rid = reservation[0]
+            eid = reservation[1]
+
+            # Step 3: Get tickets from Contains table for this reservation's event
+            # that were marked as unavailable (booked)
+            cursor.execute(
+                """SELECT tid FROM Contains WHERE eid = ?""",
+                (eid,),
+            )
+            tickets = cursor.fetchall()
+
+            # Step 4: Update ticket availability to 1 (available)
+            for ticket in tickets:
+                cursor.execute(
+                    """UPDATE Ticket SET availability = 1 WHERE tid = ?""",
+                    (ticket[0],),
+                )
+
+            # Step 5: Delete entries in Contains table related to the reservation
+            cursor.execute(
+                """DELETE FROM Contains WHERE eid = ?""",
+                (eid,),
             )
 
-        # Step 5: Delete entries in Contains table related to the reservation
-        cursor.execute(
-            """
-        DELETE FROM Contains WHERE tid IN (SELECT tid FROM Ticket WHERE tid IN 
-                    (SELECT tid FROM Contains WHERE eid IN (SELECT eid FROM Reservation WHERE rid = ?)))
-        """,
-            (rid,),
-        )
+            # Step 6: Delete entry in Makes table related to the reservation
+            cursor.execute(
+                """DELETE FROM Makes WHERE rid = ?""",
+                (rid,),
+            )
 
-        # Step 6: Delete entry in Makes table related to the reservation
-        cursor.execute(
-            """
-        DELETE FROM Makes WHERE rid = ?
-        """,
-            (rid,),
-        )
+            # Step 7: Delete reservation entry from Reservation table
+            cursor.execute(
+                """DELETE FROM Reservation WHERE rid = ?""",
+                (rid,),
+            )
+            canceled_count += 1
 
-        # Step 7: Delete reservation entry from Reservation table
-        cursor.execute(
-            """
-        DELETE FROM Reservation WHERE rid = ?
-        """,
-            (rid,),
-        )
-
-        conn.commit()  # Commit the transaction
-        conn.close()  # Close the connection
-        return jsonify({"message": "Reservation canceled successfully!"}), 200
+        conn.commit()
+        return jsonify({
+            "message": f"Successfully canceled {canceled_count} reservation(s)!",
+            "canceled_count": canceled_count
+        }), 200
 
     except Exception as e:
+        conn.rollback()
+        return jsonify({"message": f"Error: {str(e)}"}), 500
+    finally:
         conn.close()
-        return (
-            jsonify({"message": "Error: " + str(e)}),
-            500,
-        )  # Error during cancellation
 
 
 # Route to cancel an event and refund all reservations
-@app.route("/cancel_event/<int:eid>", methods=["GET"])
+@app.route("/cancel_event/<int:eid>", methods=["DELETE", "GET"])
 def cancel_event(eid):
     conn = db_connection()
     cursor = conn.cursor()
     try:
+        # First, get all ticket IDs associated with this event (before deleting Has)
+        cursor.execute(
+            """SELECT tid FROM Has WHERE eid = ?""",
+            (eid,),
+        )
+        ticket_ids = [row[0] for row in cursor.fetchall()]
+
         # Delete rows from Contains table related to the event
         cursor.execute(
             """
@@ -991,7 +1077,14 @@ def cancel_event(eid):
         WHERE eid = ?""",
             (eid,),
         )
-        conn.commit()
+
+        # Delete rows from Makes table related to reservations of this event
+        cursor.execute(
+            """
+        DELETE FROM Makes 
+        WHERE rid IN (SELECT rid FROM Reservation WHERE eid = ?)""",
+            (eid,),
+        )
 
         # Delete rows from Has table related to the event
         cursor.execute(
@@ -1000,17 +1093,14 @@ def cancel_event(eid):
         WHERE eid = ?""",
             (eid,),
         )
-        conn.commit()
 
-        # Delete tickets associated with the event
-        cursor.execute(
-            """
-        DELETE FROM Ticket 
-        WHERE tid IN 
-        (SELECT tid FROM Has WHERE eid = ?)""",
-            (eid,),
-        )
-        conn.commit()
+        # Delete tickets associated with the event using previously fetched IDs
+        if ticket_ids:
+            placeholders = ','.join('?' * len(ticket_ids))
+            cursor.execute(
+                f"""DELETE FROM Ticket WHERE tid IN ({placeholders})""",
+                ticket_ids,
+            )
 
         # Delete reservations related to the event
         cursor.execute(
@@ -1019,7 +1109,6 @@ def cancel_event(eid):
         WHERE eid = ?""",
             (eid,),
         )
-        conn.commit()
 
         # Delete the event itself
         cursor.execute(
@@ -1028,9 +1117,8 @@ def cancel_event(eid):
         WHERE eid = ?""",
             (eid,),
         )
-        conn.commit()
 
-        conn.close()  # Close the connection
+        conn.commit()  # Commit all changes at once
         return (
             jsonify(
                 {
@@ -1039,9 +1127,11 @@ def cancel_event(eid):
             ),
             200,
         )
-    except:
-        conn.close()
-        return jsonify({"message": "Error"}), 500  # Error during event cancellation
+    except Exception as e:
+        conn.rollback()  # Rollback on error
+        return jsonify({"message": f"Error: {str(e)}"}), 500
+    finally:
+        conn.close()  # Always close the connection
 
 
 # Route to fetch event revenue based on event ID or all events
