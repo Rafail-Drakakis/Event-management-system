@@ -1,4 +1,4 @@
-const API_URL = "http://localhost:5000";
+const API_URL = window.location.origin;
 
 // Helper function to display notifications
 function showMessage(message, type = "info") {

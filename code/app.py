@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, redirect
 from flask_cors import CORS
 import sqlite3, os
 
@@ -154,7 +154,12 @@ def db_connection():
 # Route to render the home page
 @app.route("/")
 def home():
-    return render_template("index.html")  # Render the 'index.html' template
+    return redirect("/login", code=302)
+
+
+@app.route("/login")
+def login_page():
+    return render_template("index.html")
 
 
 # Route to manage customers: GET (fetch customers) and POST (add new customer)
