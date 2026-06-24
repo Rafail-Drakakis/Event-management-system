@@ -5,6 +5,8 @@ import sqlite3, os
 app = Flask(__name__)
 CORS(app)
 
+DB_PATH = os.getenv("DB_PATH", "EventManagement.db")
+
 
 def initialize_database():
     """
@@ -12,8 +14,8 @@ def initialize_database():
     """
     conn = None
     try:
-        db_exists = os.path.exists("EventManagement.db")
-        conn = sqlite3.connect("EventManagement.db")
+        db_exists = os.path.exists(DB_PATH)
+        conn = sqlite3.connect(DB_PATH)
 
         if db_exists and is_database_initialized(conn):
             print("Database is already initialized.")
@@ -144,7 +146,7 @@ def setup_database(conn):
 
 
 def db_connection():
-    conn = sqlite3.connect("EventManagement.db")  # Connect to the database
+    conn = sqlite3.connect(DB_PATH)  # Connect to the database
     conn.row_factory = sqlite3.Row  # This will return rows as dictionaries
     return conn
 

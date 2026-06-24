@@ -1,0 +1,30 @@
+services:
+  web:
+    profiles: [prod]
+    build: ./code
+    volumes:
+      - sqlite_data:/app/data
+    environment:
+      DB_PATH: /app/data/EventManagement.db
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  nginx:
+    profiles: [prod]
+    build: ./nginx
+    ports:
+      - "80:80"
+    depends_on:
+      web:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  sqlite_data:
