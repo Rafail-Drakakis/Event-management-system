@@ -154,12 +154,12 @@ def db_connection():
 # Route to render the home page
 @app.route("/")
 def home():
-    return redirect("/login", code=302)
+    return render_template("index.html")
 
 
 @app.route("/login")
 def login_page():
-    return render_template("index.html")
+    return redirect("/", code=302)
 
 
 # Route to manage customers: GET (fetch customers) and POST (add new customer)

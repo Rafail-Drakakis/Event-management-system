@@ -30,13 +30,30 @@ pip install Flask Flask-Cors
 ```
 
 ## Running the Application
+
+### Local development
+
 From the repository root run:
 
 ```bash
+pip install -r code/requirements.txt
 python code/app.py
 ```
 
-The server starts on `http://localhost:5000/` and serves the web interface. On first run a new SQLite database file `EventManagement.db` will be created.
+The server starts on `http://localhost:5000/` and serves the web interface at the root URL. On first run a new SQLite database file `EventManagement.db` will be created.
+
+### Docker (production)
+
+```bash
+cp .env.example .env   # optional; see comments in file
+docker compose --profile prod up --build -d
+```
+
+| Service | URL |
+|---------|-----|
+| **Web app** | http://localhost/ |
+
+Stop the stack with `docker compose --profile prod down`.
 
 ## Notes
 The application was created as part of a university course (HY360). For further details on the database schema and queries see `report/report.pdf`.
